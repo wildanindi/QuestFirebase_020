@@ -1,5 +1,6 @@
 package com.example.questfirebase_020.repositori
 
+
 import com.example.questfirebase_020.modeldata.Siswa
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
@@ -7,6 +8,9 @@ import kotlinx.coroutines.tasks.await
 interface RepositorySiswa {
     suspend fun getDataSiswa(): List<Siswa>
     suspend fun postDataSiswa(siswa: Siswa)
+    suspend fun getSatuSiswa(id: Long): Siswa
+    suspend fun editSatuSiswa(id: Long, siswa: Siswa)
+    suspend fun hapusSatuSiswa(id: Long)
 }
 
 class FirebaseRepositorySiswa : RepositorySiswa {
@@ -31,11 +35,35 @@ class FirebaseRepositorySiswa : RepositorySiswa {
     override suspend fun postDataSiswa(siswa: Siswa) {
         val docRef = if (siswa.id == 0L) collection.document() else collection.document(siswa.id.toString())
         val data = hashMapOf(
-            "id" to (siswa.id.takeIf { it != 0L } ?: docRef.id.hashCode()),
+            "id" to (siswa.id.takeIf { it != 0L } ?: docRef.id.hashCode()), // Menggunakan hashcode sbg ID jika 0
             "nama" to siswa.nama,
             "alamat" to siswa.alamat,
             "telpon" to siswa.telpon
         )
         docRef.set(data).await()
+    }
+
+    override suspend fun getSatuSiswa(id: Long): Siswa {
+        return try {
+            val query = collection.whereEqualTo("id", id).get().await()
+            query.documents.firstOrNull()?.let { doc ->
+                Siswa(
+                    id = doc.getLong("id")?.toLong() ?: 0,
+                    nama = doc.getString("nama") ?: "",
+                    alamat = doc.getString("alamat") ?: "",
+                    telpon = doc.getString("telpon") ?: ""
+                )
+            }!! // Force not null (hati-hati di production)
+        } catch (e: Exception) {
+            throw Exception("Gagal baca data siswa : ${e.message}")
+        }
+    }
+
+
+
+    override suspend fun hapusSatuSiswa(id: Long) {
+        val docQuery = collection.whereEqualTo("id", id).get().await()
+        val docId = docQuery.documents.firstOrNull()?.id ?: return
+        collection.document(docId).delete().await()
     }
 }
